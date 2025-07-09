@@ -195,6 +195,11 @@ main {
     color: var(--bg-color);
 }
 
+.profit {
+    color: var(--secondary-color);
+    font-weight: 700;
+}
+
 .converter-content {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;

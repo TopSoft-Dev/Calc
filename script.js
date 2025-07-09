@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Kalkulator główny
     const initialAmountEl = document.getElementById('initialAmount');
     const interestRateEl = document.getElementById('interestRate');
+    const monthlyDepositEl = document.getElementById('monthlyDeposit'); // DODANE
     const compoundFrequencyEl = document.getElementById('compoundFrequency');
     const durationEl = document.getElementById('duration');
     const timeUnitEl = document.getElementById('timeUnit');
@@ -94,47 +95,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function calculateAndDisplay() {
         const initialAmount = parseFloat(initialAmountEl.value);
-        const interestRateInput = parseFloat(interestRateEl.value) / 100;
+        const periodicInterestRate = parseFloat(interestRateEl.value) / 100;
+        const periodicDeposit = parseFloat(monthlyDepositEl.value);
         const compoundFrequency = parseInt(compoundFrequencyEl.value);
         const durationInput = parseInt(durationEl.value);
         const timeUnitMultiplier = parseFloat(timeUnitEl.value);
         const unitText = timeUnitEl.options[timeUnitEl.selectedIndex].text;
 
-        if (isNaN(initialAmount) || isNaN(interestRateInput) || isNaN(durationInput)) {
+        if (isNaN(initialAmount) || isNaN(periodicInterestRate) || isNaN(durationInput) || isNaN(periodicDeposit)) {
             resultsSummaryEl.innerHTML = `<p>Proszę wypełnić wszystkie pola poprawnymi danymi.</p>`;
             resultsTableBodyEl.innerHTML = '';
             if (growthChart) growthChart.destroy();
             return;
         }
 
-        const annualInterestRate = interestRateInput * (compoundFrequency);
         const resultsData = [{ period: 'Start', step: 0, amount: initialAmount, profit: 0 }];
 
         for (let i = 1; i <= durationInput; i++) {
             const totalYears = i * timeUnitMultiplier;
-            const amount = initialAmount * Math.pow((1 + annualInterestRate / compoundFrequency), (compoundFrequency * totalYears));
+            const n = compoundFrequency * totalYears; // Całkowita liczba okresów kapitalizacji
+            const r = periodicInterestRate;
+            let amount;
+
+            if (r === 0) {
+                amount = initialAmount + (periodicDeposit * n);
+            } else {
+                const futureValueInitial = initialAmount * Math.pow((1 + r), n);
+                const futureValueDeposits = periodicDeposit * ((Math.pow((1 + r), n) - 1) / r);
+                amount = futureValueInitial + futureValueDeposits;
+            }
+            
+            const totalInvested = initialAmount + (periodicDeposit * n);
+            const profit = amount - totalInvested;
+
             resultsData.push({
                 period: `${unitText.slice(0, -1)} ${i}`,
                 step: i,
                 amount: amount,
-                profit: amount - initialAmount
+                profit: profit
             });
         }
 
         const finalResult = resultsData[resultsData.length - 1];
+        const finalProfitFormatted = finalResult.profit >= 0 ? `+${formatNumber(finalResult.profit)}` : formatNumber(finalResult.profit);
+        const profitClass = finalResult.profit >= 0 ? 'profit' : 'loss';
+
         resultsSummaryEl.innerHTML = `
             <p>Po <strong>${durationInput} ${unitText.toLowerCase()}</strong> Twoja inwestycja będzie warta:</p>
             <h3 style="color: var(--secondary-color); font-size: 2rem;">${formatNumber(finalResult.amount)}</h3>
-            <p>Całkowity zysk: <strong>${formatNumber(finalResult.profit)}</strong></p>
+            <p>Całkowity zysk: <strong class="${profitClass}">${finalProfitFormatted}</strong></p>
         `;
 
         resultsTableBodyEl.innerHTML = '';
         resultsData.forEach(result => {
             const row = document.createElement('tr');
+            const profitDisplay = result.period === 'Start' 
+                ? `<td>${formatNumber(result.profit)}</td>`
+                : result.profit >= 0 
+                    ? `<td class="profit">+${formatNumber(result.profit)}</td>` 
+                    : `<td class="loss">${formatNumber(result.profit)}</td>`;
+            
             row.innerHTML = `
                 <td>${result.period}</td>
                 <td>${formatNumber(result.amount)}</td>
-                <td>${formatNumber(result.profit)}</td>
+                ${profitDisplay}
             `;
             resultsTableBodyEl.appendChild(row);
         });
@@ -186,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === Event Listeners ===
     // Główny kalkulator
-    [initialAmountEl, interestRateEl, durationEl, compoundFrequencyEl, timeUnitEl].forEach(el => {
+    [initialAmountEl, interestRateEl, monthlyDepositEl, durationEl, compoundFrequencyEl, timeUnitEl].forEach(el => {
         el.addEventListener('input', calculateAndDisplay);
         if (el.tagName === 'SELECT') {
             el.addEventListener('change', calculateAndDisplay);
