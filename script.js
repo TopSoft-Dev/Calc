@@ -1,9 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     // === Elementy DOM ===
-    // Kalkulator główny
     const initialAmountEl = document.getElementById('initialAmount');
     const interestRateEl = document.getElementById('interestRate');
-    const monthlyDepositEl = document.getElementById('monthlyDeposit'); // DODANE
+    const monthlyDepositEl = document.getElementById('monthlyDeposit');
     const compoundFrequencyEl = document.getElementById('compoundFrequency');
     const durationEl = document.getElementById('duration');
     const timeUnitEl = document.getElementById('timeUnit');
@@ -13,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const chartCanvas = document.getElementById('growthChart').getContext('2d');
     let growthChart;
 
-    // Przelicznik walut
     const converterAmountEl = document.getElementById('converterAmount');
     const fromCurrencyEl = document.getElementById('fromCurrency');
     const toCurrencyEl = document.getElementById('toCurrency');
@@ -38,14 +36,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === Funkcje ===
 
-    // --- Przelicznik Walut ---
     async function fetchRates() {
         try {
             const response = await fetch('https://api.frankfurter.app/latest?from=USD');
             if (!response.ok) throw new Error('Błąd sieci');
             const data = await response.json();
-            exchangeRates = { ...data.rates, 'USD': 1 }; // Dodajemy USD do listy
-            performConversion(); // Przelicz po załadowaniu kursów
+            exchangeRates = { ...data.rates, 'USD': 1 };
+            performConversion();
         } catch (error) {
             converterResultEl.innerHTML = `<p style="color: #ff5555;">Błąd ładowania kursów</p>`;
             console.error("Błąd API walut:", error);
@@ -68,8 +65,6 @@ document.addEventListener('DOMContentLoaded', () => {
         converterResultEl.innerHTML = `<p>${formatNumber(convertedAmount)} ${toCurrency}</p>`;
     }
 
-
-    // --- Główny Kalkulator ---
     function updateUserInterface() {
         const frequency = compoundFrequencyEl.value;
         interestRateLabel.textContent = interestRateLabels[frequency];
@@ -94,35 +89,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function calculateAndDisplay() {
-        const initialAmount = parseFloat(initialAmountEl.value);
-        const periodicInterestRate = parseFloat(interestRateEl.value) / 100;
-        const periodicDeposit = parseFloat(monthlyDepositEl.value);
+        const initialAmount = parseFloat(initialAmountEl.value) || 0;
+        const periodicInterestRate = parseFloat(interestRateEl.value) / 100 || 0;
+        const periodicDeposit = parseFloat(monthlyDepositEl.value) || 0;
         const compoundFrequency = parseInt(compoundFrequencyEl.value);
         const durationInput = parseInt(durationEl.value);
         const timeUnitMultiplier = parseFloat(timeUnitEl.value);
         const unitText = timeUnitEl.options[timeUnitEl.selectedIndex].text;
 
-        if (isNaN(initialAmount) || isNaN(periodicInterestRate) || isNaN(durationInput) || isNaN(periodicDeposit)) {
+        if (isNaN(initialAmount) || isNaN(periodicInterestRate) || isNaN(durationInput)) {
             resultsSummaryEl.innerHTML = `<p>Proszę wypełnić wszystkie pola poprawnymi danymi.</p>`;
             resultsTableBodyEl.innerHTML = '';
             if (growthChart) growthChart.destroy();
             return;
         }
 
-        const resultsData = [{ period: 'Start', step: 0, amount: initialAmount, profit: 0 }];
+        const resultsData = [{ period: 'Start', step: 0, amount: initialAmount, profit: 0, amountWithoutDeposits: initialAmount }];
 
         for (let i = 1; i <= durationInput; i++) {
             const totalYears = i * timeUnitMultiplier;
-            const n = compoundFrequency * totalYears; // Całkowita liczba okresów kapitalizacji
+            const n = compoundFrequency * totalYears;
             const r = periodicInterestRate;
             let amount;
+            let amountWithoutDeposits;
 
             if (r === 0) {
                 amount = initialAmount + (periodicDeposit * n);
+                amountWithoutDeposits = initialAmount;
             } else {
                 const futureValueInitial = initialAmount * Math.pow((1 + r), n);
                 const futureValueDeposits = periodicDeposit * ((Math.pow((1 + r), n) - 1) / r);
                 amount = futureValueInitial + futureValueDeposits;
+                amountWithoutDeposits = futureValueInitial;
             }
             
             const totalInvested = initialAmount + (periodicDeposit * n);
@@ -132,7 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 period: `${unitText.slice(0, -1)} ${i}`,
                 step: i,
                 amount: amount,
-                profit: profit
+                profit: profit,
+                amountWithoutDeposits: amountWithoutDeposits
             });
         }
 
@@ -163,30 +162,68 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsTableBodyEl.appendChild(row);
         });
 
-        // Aktualizacja przelicznika walut
         converterAmountEl.value = finalResult.amount.toFixed(2);
         performConversion();
 
         // Renderowanie wykresu
         if (growthChart) growthChart.destroy();
+
+        const chartDatasets = [];
+        const hasDeposits = periodicDeposit > 0;
+
+        if (hasDeposits) {
+            // Dwie linie: z wpłatami (zielona) i bez (żółta)
+            chartDatasets.push({
+                label: 'Wartość z wpłatami',
+                data: resultsData.map(r => r.amount),
+                backgroundColor: 'rgba(0, 255, 0, 0.2)',
+                borderColor: 'rgba(0, 128, 0, 1)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(0, 128, 0, 1)',
+                pointBorderColor: '#fff',
+                pointHoverRadius: 7,
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(0, 128, 0, 1)',
+                fill: true,
+                tension: 0.4
+            });
+            chartDatasets.push({
+                label: 'Wartość bez wpłat',
+                data: resultsData.map(r => r.amountWithoutDeposits),
+                backgroundColor: 'rgba(255, 255, 0, 0.2)',
+                borderColor: 'rgba(255, 255, 0, 1)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(255, 255, 0, 1)',
+                pointBorderColor: '#fff',
+                pointHoverRadius: 7,
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(255, 255, 0, 1)',
+                fill: true,
+                tension: 0.4
+            });
+        } else {
+            // Jedna linia: tylko inwestycja (żółta)
+            chartDatasets.push({
+                label: 'Wartość inwestycji',
+                data: resultsData.map(r => r.amount),
+                backgroundColor: 'rgba(255, 255, 0, 0.2)',
+                borderColor: 'rgba(255, 255, 0, 1)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(255, 255, 0, 1)',
+                pointBorderColor: '#fff',
+                pointHoverRadius: 7,
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(255, 255, 0, 1)',
+                fill: true,
+                tension: 0.4
+            });
+        }
+
         growthChart = new Chart(chartCanvas, {
             type: 'line',
             data: {
                 labels: resultsData.map(r => r.step),
-                datasets: [{
-                    label: 'Wartość inwestycji',
-                    data: resultsData.map(r => r.amount),
-                    backgroundColor: 'rgba(255, 215, 0, 0.2)',
-                    borderColor: 'rgba(255, 215, 0, 1)',
-                    borderWidth: 2,
-                    pointBackgroundColor: 'rgba(255, 215, 0, 1)',
-                    pointBorderColor: '#fff',
-                    pointHoverRadius: 7,
-                    pointHoverBackgroundColor: '#fff',
-                    pointHoverBorderColor: 'rgba(255, 215, 0, 1)',
-                    fill: true,
-                    tension: 0.4
-                }]
+                datasets: chartDatasets
             },
             options: {
                 responsive: true,
@@ -201,15 +238,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 },
                 plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (context) => `Wartość: ${formatNumber(context.parsed.y)}` } }
+                    legend: { 
+                        display: hasDeposits, // Pokazuj legendę tylko gdy są dwie linie
+                        labels: {
+                            color: '#e0e0e0'
+                        }
+                    },
+                    tooltip: { 
+                        callbacks: { 
+                            label: (context) => {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += `${formatNumber(context.parsed.y)}`;
+                                return label;
+                            }
+                        } 
+                    }
                 }
             }
         });
     }
 
     // === Event Listeners ===
-    // Główny kalkulator
     [initialAmountEl, interestRateEl, monthlyDepositEl, durationEl, compoundFrequencyEl, timeUnitEl].forEach(el => {
         el.addEventListener('input', calculateAndDisplay);
         if (el.tagName === 'SELECT') {
@@ -218,7 +270,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     compoundFrequencyEl.addEventListener('change', updateUserInterface);
 
-    // Przelicznik walut
     [converterAmountEl, fromCurrencyEl, toCurrencyEl].forEach(el => {
         el.addEventListener('input', performConversion);
         if (el.tagName === 'SELECT') {
