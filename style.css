@@ -25,12 +25,12 @@ body {
     background-color: var(--bg-color);
     color: var(--on-surface-color);
     line-height: 1.6;
-    padding: 2rem;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
+    padding: 2rem;
 }
 
 header {
@@ -257,14 +257,11 @@ footer {
 }
 
 @media (max-width: 768px) {
-    body {
+    .container {
         padding: 1rem;
     }
     header h1 {
         font-size: 1.8rem;
-    }
-    .container {
-        width: 100%;
     }
     .form-group-inline, .form-row {
         grid-template-columns: 1fr;
